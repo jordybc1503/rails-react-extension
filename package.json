@@ -4,6 +4,7 @@
   "version": "0.0.1",
   "description": "Extension to give help you during interviews in meet and teams",
   "author": "Cesar Jordi Bolo Caldas",
+  "source": "src",
   "scripts": {
     "dev": "plasmo dev",
     "build": "plasmo build",
@@ -26,6 +27,9 @@
   "manifest": {
     "host_permissions": [
       "https://*/*"
+    ],
+    "permissions": [
+      "storage"
     ]
   }
 }
