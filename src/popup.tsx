@@ -1,12 +1,72 @@
-import { useState } from "react"
+import { MemoryRouter, Navigate, Route, Routes, useNavigate } from "react-router-dom"
 
 import { Login } from "./components/Login"
 import { Register } from "./components/Register"
+import { Dashboard } from "./components/Dashboard"
+import { Chat } from "./components/Chat"
+import { Settings } from "./components/Settings"
 import { useAuth } from "./hooks/useAuth"
+import type { LoginCredentials, RegisterCredentials, User } from "./types/auth"
+
+interface UnauthenticatedRoutesProps {
+  login: (credentials: LoginCredentials) => Promise<void>
+  register: (credentials: RegisterCredentials) => Promise<void>
+  error?: string | null
+  loading?: boolean
+}
+
+function UnauthenticatedRoutes({ login, register, error, loading }: UnauthenticatedRoutesProps) {
+  const navigate = useNavigate()
+
+  return (
+    <Routes>
+      <Route
+        path="/login"
+        element={
+          <Login
+            onLogin={login}
+            onSwitchToRegister={() => navigate("/register")}
+            error={error}
+            loading={loading}
+          />
+        }
+      />
+      <Route
+        path="/register"
+        element={
+          <Register
+            onRegister={register}
+            onSwitchToLogin={() => navigate("/login")}
+            error={error}
+            loading={loading}
+          />
+        }
+      />
+      <Route path="*" element={<Navigate to="/login" replace />} />
+    </Routes>
+  )
+}
+
+interface AuthenticatedRoutesProps {
+  user: User
+  onLogout: () => void
+}
+
+function AuthenticatedRoutes({ user, onLogout }: AuthenticatedRoutesProps) {
+  return (
+    <Routes>
+      <Route path="/" element={<Dashboard user={user} onLogout={onLogout} />}>
+        <Route index element={<Navigate to="chat" replace />} />
+        <Route path="chat" element={<Chat />} />
+        <Route path="settings" element={<Settings user={user} onLogout={onLogout} />} />
+      </Route>
+      <Route path="*" element={<Navigate to="/chat" replace />} />
+    </Routes>
+  )
+}
 
 function IndexPopup() {
   const { user, loading, error, isAuthenticated, login, register, logout } = useAuth()
-  const [showRegister, setShowRegister] = useState(false)
 
   if (loading) {
     return (
@@ -22,89 +82,26 @@ function IndexPopup() {
     )
   }
 
-  if (!isAuthenticated) {
-    if (showRegister) {
-      return (
-        <Register
-          onRegister={register}
-          onSwitchToLogin={() => setShowRegister(false)}
-          error={error}
-          loading={loading}
-        />
-      )
-    }
+  const routerKey = isAuthenticated ? "auth" : "guest"
+  const initialEntries = isAuthenticated ? ["/chat"] : ["/login"]
 
+  if (isAuthenticated && user) {
     return (
-      <Login
-        onLogin={login}
-        onSwitchToRegister={() => setShowRegister(true)}
-        error={error}
-        loading={loading}
-      />
+      <MemoryRouter key={routerKey} initialEntries={initialEntries}>
+        <AuthenticatedRoutes user={user} onLogout={logout} />
+      </MemoryRouter>
     )
   }
 
   return (
-    <div
-      style={{
-        padding: 20,
-        width: 320,
-        fontFamily: "system-ui, -apple-system, sans-serif"
-      }}>
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: 20
-        }}>
-        <h2 style={{ margin: 0, fontSize: 20 }}>Welcome!</h2>
-        <button
-          onClick={logout}
-          style={{
-            padding: "6px 12px",
-            fontSize: 13,
-            backgroundColor: "#f5f5f5",
-            border: "1px solid #ddd",
-            borderRadius: 4,
-            cursor: "pointer"
-          }}>
-          Logout
-        </button>
-      </div>
-
-      <div
-        style={{
-          padding: 12,
-          backgroundColor: "#f8f9fa",
-          borderRadius: 6,
-          marginBottom: 16
-        }}>
-        <p style={{ margin: 0, fontSize: 14, color: "#666" }}>
-          <strong>Email:</strong> {user?.email}
-        </p>
-        {user?.name && (
-          <p style={{ margin: "8px 0 0 0", fontSize: 14, color: "#666" }}>
-            <strong>Name:</strong> {user.name}
-          </p>
-        )}
-      </div>
-
-      <div
-        style={{
-          padding: 16,
-          backgroundColor: "#e7f3ff",
-          border: "1px solid #b3d9ff",
-          borderRadius: 6
-        }}>
-        <h3 style={{ marginTop: 0, marginBottom: 8, fontSize: 16 }}>
-          You're authenticated! 🎉
-        </h3>
-        <p style={{ margin: 0, fontSize: 14, color: "#333" }}>
-          Your extension is now connected to the Rails backend with JWT authentication.
-        </p>
-      </div>
-    </div>
+    <MemoryRouter key={routerKey} initialEntries={initialEntries}>
+      <UnauthenticatedRoutes
+        login={login}
+        register={register}
+        error={error}
+        loading={loading}
+      />
+    </MemoryRouter>
   )
 }
 
