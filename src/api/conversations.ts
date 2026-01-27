@@ -1,6 +1,13 @@
 import type { Conversation } from "../types/conversation"
 import { authenticatedFetch } from "./http"
 
+export interface ConversationPayload {
+  title?: string
+  ai_system_prompt?: string
+  ai_model?: string
+  ai_api_key?: string
+}
+
 export async function getConversations(): Promise<Conversation[]> {
   const response = await authenticatedFetch("/api/v1/conversations")
 
@@ -21,7 +28,7 @@ export async function getConversations(): Promise<Conversation[]> {
   return []
 }
 
-export async function createConversation(payload: { title?: string } = {}): Promise<Conversation> {
+export async function createConversation(payload: ConversationPayload = {}): Promise<Conversation> {
   const response = await authenticatedFetch("/api/v1/conversations", {
     method: "POST",
     body: JSON.stringify(payload)
@@ -45,6 +52,28 @@ export async function getConversation(conversationId: string | number): Promise<
 
   if (!response.ok) {
     throw new Error("Failed to load conversation")
+  }
+
+  const data = await response.json()
+
+  if (data?.conversation) {
+    return data.conversation as Conversation
+  }
+
+  return data as Conversation
+}
+
+export async function updateConversation(
+  conversationId: string | number,
+  payload: ConversationPayload
+): Promise<Conversation> {
+  const response = await authenticatedFetch(`/api/v1/conversations/${conversationId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload)
+  })
+
+  if (!response.ok) {
+    throw new Error("Failed to update conversation")
   }
 
   const data = await response.json()

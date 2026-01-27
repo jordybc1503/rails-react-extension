@@ -1,3 +1,4 @@
+import type { Conversation } from "../types/conversation"
 import type { Message } from "../types/message"
 import { authenticatedFetch } from "./http"
 
@@ -5,6 +6,13 @@ export interface CreateMessagePayload {
   content: string
   role?: string
   status?: string
+}
+
+export interface CreateMessageResult {
+  message: Message
+  assistantMessage?: Message | null
+  conversation?: Conversation | null
+  error?: string | null
 }
 
 function extractMessages(data: unknown): Message[] {
@@ -41,7 +49,7 @@ export async function getMessages(conversationId: string | number): Promise<Mess
 export async function createMessage(
   conversationId: string | number,
   payload: CreateMessagePayload
-): Promise<Message> {
+): Promise<CreateMessageResult> {
   const response = await authenticatedFetch(`/api/v1/conversations/${conversationId}/messages`, {
     method: "POST",
     body: JSON.stringify(payload)
@@ -53,10 +61,17 @@ export async function createMessage(
 
   const data = await response.json()
 
-  if (data?.message) {
-    return data.message as Message
+  const message = (data?.message ?? data) as Message
+  const assistantMessage = (data?.assistant_message ?? data?.assistantMessage ?? null) as
+    | Message
+    | null
+  const conversation = (data?.conversation ?? null) as Conversation | null
+  const error = (data?.error ?? null) as string | null
+
+  return {
+    message,
+    assistantMessage,
+    conversation,
+    error
   }
-
-  return data as Message
 }
-
