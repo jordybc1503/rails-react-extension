@@ -8,20 +8,21 @@ interface DashboardProps {
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
-  const linkStyle = ({ isActive }: { isActive: boolean }) => ({
-    padding: "6px 10px",
+  const compactLinkStyle = ({ isActive }) => ({
+    padding: "4px 8px",
+    fontSize: 12,
     borderRadius: 6,
     textDecoration: "none",
-    fontSize: 13,
-    fontWeight: 500,
+    border: "1px solid #e2e8f0",
     color: isActive ? "white" : "#0f172a",
     backgroundColor: isActive ? "#0ea5e9" : "#e2e8f0"
   })
 
+
   return (
     <div
       style={{
-        padding: 16,
+        padding: 12,
         width: "100%",
         minWidth: 300,
         height: "100%",
@@ -30,46 +31,67 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
         display: "flex",
         flexDirection: "column",
         minHeight: 0,
-        gap: 10
-      }}>
+        gap: 8
+      }}
+    >
+      {/* TOP BAR */}
       <div
         style={{
           display: "flex",
-          justifyContent: "space-between",
           alignItems: "center",
-          flexWrap: "wrap",
-          gap: 8,
-          marginBottom: 4
-        }}>
-        <div style={{ fontSize: 14, fontWeight: 600, wordBreak: "break-word" }}>
-          Bienvenido, {user.email}
+          gap: 12,
+          borderBottom: "1px solid #e2e8f0",
+          paddingBottom: 6
+        }}
+      >
+        {/* Usuario */}
+        <div
+          style={{
+            fontSize: 13,
+            fontWeight: 600,
+            whiteSpace: "nowrap"
+          }}
+        >
+          {user.email}
         </div>
+
+        {/* Nav */}
+        <nav
+          style={{
+            display: "flex",
+            gap: 6,
+            flex: 1
+          }}
+        >
+          <NavLink to="chat" style={compactLinkStyle}>
+            Chat
+          </NavLink>
+          <NavLink to="conversations" style={compactLinkStyle}>
+            Conversaciones
+          </NavLink>
+          <NavLink to="settings" style={compactLinkStyle}>
+            Settings
+          </NavLink>
+        </nav>
+
+        {/* Logout */}
         <button
           onClick={onLogout}
           style={{
-            padding: "6px 10px",
-            fontSize: 12,
+            padding: "4px 8px",
+            fontSize: 11,
             borderRadius: 6,
             border: "1px solid #e2e8f0",
             background: "white",
-            cursor: "pointer"
-          }}>
+            cursor: "pointer",
+            whiteSpace: "nowrap"
+          }}
+        >
           Cerrar sesión
         </button>
       </div>
 
-      <nav style={{ display: "flex", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
-        <NavLink to="chat" style={linkStyle}>
-          Chat
-        </NavLink>
-        <NavLink to="conversations" style={linkStyle}>
-          Conversaciones
-        </NavLink>
-        <NavLink to="settings" style={linkStyle}>
-          Settings
-        </NavLink>
-      </nav>
-
+      {/* CONTENT */}
       <div
         style={{
           border: "1px solid #e2e8f0",
@@ -80,9 +102,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
           display: "flex",
           flexDirection: "column",
           overflow: "hidden"
-        }}>
+        }}
+      >
         <Outlet />
       </div>
     </div>
   )
+
 }

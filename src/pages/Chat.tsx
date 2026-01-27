@@ -338,8 +338,8 @@ export function Chat() {
       <div
         style={{
           border: "1px solid #e2e8f0",
-          borderRadius: 8,
-          padding: 10,
+          borderRadius: 4,
+          padding: 6,
           background: "#ffffff",
           marginBottom: 6,
           display: "flex",
@@ -516,8 +516,7 @@ export function Chat() {
       </div>
 
       <div style={{ display: "flex", gap: 8 }}>
-        <input
-          type="text"
+        <textarea
           value={message}
           onChange={(e) => setMessage(e.target.value)}
           onKeyDown={(event) => {

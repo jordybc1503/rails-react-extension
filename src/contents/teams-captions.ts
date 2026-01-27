@@ -3,16 +3,25 @@ import type { PlasmoCSConfig } from "plasmo"
 import { createCaptionDispatcher } from "../captions/caption-pipeline"
 
 export const config: PlasmoCSConfig = {
-  matches: ["https://teams.microsoft.com/*"],
-  run_at: "document_idle"
+  matches: ["https://teams.microsoft.com/*", "https://teams.live.com/*"],
+  run_at: "document_idle",
+  all_frames: true
 }
 
 const dispatcher = createCaptionDispatcher("teams")
 const lastTextBySpan = new WeakMap<Element, string>()
 
 function extractSpeaker(span: Element): string {
-  const container = span.closest("[data-tid='closed-caption-item']") ?? span.parentElement
-  const speakerElement = container?.querySelector("[data-tid='closed-caption-speaker-name']")
+  const captionItem =
+    span.closest("[data-tid='closed-caption-item']") ??
+    span.closest("[data-tid='closed-captions-v2-items-renderer']") ??
+    span.closest(".fui-ChatMessageCompact") ??
+    span.parentElement
+
+  const speakerElement =
+    captionItem?.querySelector("[data-tid='closed-caption-speaker-name']") ??
+    captionItem?.querySelector("[data-tid='author']")
+
   const speaker = speakerElement?.textContent?.trim()
   return speaker || "Interviewer"
 }
