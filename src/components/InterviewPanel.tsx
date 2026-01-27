@@ -1,13 +1,7 @@
-import type { PlasmoCSConfig } from "plasmo"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react"
 
 import IndexPopup from "../popup"
-
-export const config: PlasmoCSConfig = {
-  matches: ["https://meet.google.com/*", "https://teams.microsoft.com/*", "https://*.zoom.us/*"],
-  run_at: "document_idle"
-}
 
 type PanelState = {
   isOpen: boolean
@@ -130,7 +124,13 @@ function getMaxSizeAtPosition(x: number, y: number) {
   }
 }
 
-export default function InterviewPanel() {
+export function InterviewPanel() {
+  console.log("[panel] interview panel component mounted", {
+    href: window.location.href,
+    origin: window.location.origin,
+    isTopFrame: window.top === window
+  })
+
   const originKey = useOriginKey()
   const { ready, panelState, setPanelState } = usePanelPersistence(originKey)
 
@@ -454,7 +454,7 @@ export default function InterviewPanel() {
                 color: "#0f172a",
                 background: "#f8fafc"
               }}>
-              Asistente minimizado. Arrástrame o expándeme.
+              Asistente minimizado. Arrastrame o expandeme.
             </div>
           )}
 

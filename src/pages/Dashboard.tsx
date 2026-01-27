@@ -23,6 +23,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
       style={{
         padding: 16,
         width: "100%",
+        minWidth: 300,
         height: "100%",
         boxSizing: "border-box",
         fontFamily: "system-ui, -apple-system, sans-serif",
