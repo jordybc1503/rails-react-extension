@@ -1,10 +1,11 @@
 import { MemoryRouter, Navigate, Route, Routes, useNavigate } from "react-router-dom"
 
-import { Login } from "./components/Login"
-import { Register } from "./components/Register"
-import { Dashboard } from "./components/Dashboard"
-import { Chat } from "./components/Chat"
-import { Settings } from "./components/Settings"
+import { Login } from "./pages/Login"
+import { Register } from "./pages/Register"
+import { Dashboard } from "./pages/Dashboard"
+import { Chat } from "./pages/Chat"
+import { ConversationPage } from "./pages/ConversationPage"
+import { Settings } from "./pages/Settings"
 import { useAuth } from "./hooks/useAuth"
 import type { LoginCredentials, RegisterCredentials, User } from "./types/auth"
 
@@ -58,6 +59,8 @@ function AuthenticatedRoutes({ user, onLogout }: AuthenticatedRoutesProps) {
       <Route path="/" element={<Dashboard user={user} onLogout={onLogout} />}>
         <Route index element={<Navigate to="chat" replace />} />
         <Route path="chat" element={<Chat />} />
+        <Route path="chat/:conversationId" element={<Chat />} />
+        <Route path="conversations" element={<ConversationPage />} />
         <Route path="settings" element={<Settings user={user} onLogout={onLogout} />} />
       </Route>
       <Route path="*" element={<Navigate to="/chat" replace />} />

@@ -40,6 +40,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
         <NavLink to="chat" style={linkStyle}>
           Chat
         </NavLink>
+        <NavLink to="conversations" style={linkStyle}>
+          Conversaciones
+        </NavLink>
         <NavLink to="settings" style={linkStyle}>
           Settings
         </NavLink>
