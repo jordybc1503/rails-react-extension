@@ -76,7 +76,8 @@ function IndexPopup() {
       <div
         style={{
           padding: 20,
-          width: 320,
+          width: "100%",
+          boxSizing: "border-box",
           fontFamily: "system-ui, -apple-system, sans-serif",
           textAlign: "center"
         }}>

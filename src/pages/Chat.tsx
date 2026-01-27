@@ -12,6 +12,7 @@ import type { Conversation } from "../types/conversation"
 import type { Message } from "../types/message"
 
 export function Chat() {
+  const ACTIVE_CONVERSATION_KEY = "active_conversation_id"
   const [message, setMessage] = useState("")
   const [messages, setMessages] = useState<Message[]>([])
   const [conversation, setConversation] = useState<Conversation | null>(null)
@@ -19,6 +20,7 @@ export function Chat() {
   const [error, setError] = useState<string | null>(null)
   const [sending, setSending] = useState(false)
   const [savingConfig, setSavingConfig] = useState(false)
+  const [configExpanded, setConfigExpanded] = useState(false)
   const [conversationTitleOverride, setConversationTitleOverride] = useState<string | null>(null)
   const [aiSystemPrompt, setAiSystemPrompt] = useState("")
   const [aiModel, setAiModel] = useState("")
@@ -74,6 +76,14 @@ export function Chat() {
 
   useEffect(() => {
     if (!conversationId) {
+      return
+    }
+
+    void chrome.storage.local.set({ [ACTIVE_CONVERSATION_KEY]: conversationId })
+  }, [ACTIVE_CONVERSATION_KEY, conversationId])
+
+  useEffect(() => {
+    if (!conversationId) {
       setMessages([])
       setConversation(null)
       setConversationTitleOverride(null)
@@ -114,6 +124,35 @@ export function Chat() {
       isMounted = false
     }
   }, [applyConversationConfig, conversationId])
+
+  useEffect(() => {
+    if (!conversationId) {
+      return
+    }
+
+    let isCancelled = false
+
+    const syncMessages = async () => {
+      try {
+        const latestMessages = await getMessages(conversationId)
+        if (!isCancelled && latestMessages.length > 0) {
+          setMessages(latestMessages)
+        }
+      } catch (err) {
+        if (!isCancelled) {
+          // Silently ignore polling errors to avoid noisy UI.
+        }
+      }
+    }
+
+    void syncMessages()
+    const intervalId = window.setInterval(syncMessages, 2500)
+
+    return () => {
+      isCancelled = true
+      window.clearInterval(intervalId)
+    }
+  }, [conversationId])
 
   const conversationTitle = useMemo(() => {
     const state = (location.state ?? {}) as { conversationTitle?: string }
@@ -205,6 +244,14 @@ export function Chat() {
     }
   }, [applyConversationConfig, buildConversationPayload, conversationId])
 
+  const configStatusText = conversationId
+    ? configDirty
+      ? "Tienes cambios sin guardar."
+      : "Configuración guardada."
+    : "Se aplicará al crear la conversación."
+
+  const configSummaryText = `Modelo: ${aiModel.trim() || DEFAULT_MODEL}`
+
   const handleSend = useCallback(async () => {
     const trimmed = message.trim()
     if (!trimmed) {
@@ -271,16 +318,21 @@ export function Chat() {
   ])
 
   return (
-    <div>
-      <div style={{ marginBottom: 6, fontSize: 13, fontWeight: 700 }}>{conversationTitle}</div>
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: 6,
+        height: "100%",
+        minHeight: 0
+      }}>
+      <div style={{ marginBottom: 2, fontSize: 13, fontWeight: 700 }}>{conversationTitle}</div>
       {conversationId ? (
-        <div style={{ marginBottom: 12, fontSize: 11, color: "#94a3b8" }}>
-          ID: {conversationId}
-        </div>
-      ) : null}
-      <div style={{ marginBottom: 12, fontSize: 13, color: "#475569" }}>
+        null
+      ) : <div style={{ marginBottom: 6, fontSize: 12, color: "#475569" }}>
         Aquí irá el chat en tiempo real.
-      </div>
+      </div>}
+
 
       <div
         style={{
@@ -288,94 +340,115 @@ export function Chat() {
           borderRadius: 8,
           padding: 10,
           background: "#ffffff",
-          marginBottom: 10,
+          marginBottom: 6,
           display: "flex",
           flexDirection: "column",
-          gap: 8
+          gap: configExpanded ? 8 : 6
         }}>
-        <div style={{ fontSize: 12, fontWeight: 700 }}>Configuración IA</div>
-        <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 11 }}>
-          Prompt del sistema
-          <textarea
-            value={aiSystemPrompt}
-            onChange={(event) => setAiSystemPrompt(event.target.value)}
-            placeholder="Define el comportamiento del agente..."
-            rows={3}
-            style={{
-              border: "1px solid #cbd5e1",
-              borderRadius: 6,
-              padding: "6px 8px",
-              fontSize: 12,
-              resize: "vertical"
-            }}
-          />
-        </label>
-        <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 11 }}>
-          Modelo
-          <input
-            value={aiModel}
-            onChange={(event) => setAiModel(event.target.value)}
-            placeholder={DEFAULT_MODEL}
-            list="ai-model-suggestions"
-            style={{
-              border: "1px solid #cbd5e1",
-              borderRadius: 6,
-              padding: "6px 8px",
-              fontSize: 12
-            }}
-          />
-          <datalist id="ai-model-suggestions">
-            {MODEL_SUGGESTIONS.map((modelName) => (
-              <option key={modelName} value={modelName} />
-            ))}
-          </datalist>
-        </label>
-        <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 11 }}>
-          API key
-          <input
-            type="password"
-            value={aiApiKey}
-            onChange={(event) => setAiApiKey(event.target.value)}
-            placeholder="sk-..."
-            autoComplete="off"
-            style={{
-              border: "1px solid #cbd5e1",
-              borderRadius: 6,
-              padding: "6px 8px",
-              fontSize: 12
-            }}
-          />
-        </label>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div style={{ fontSize: 10, color: "#64748b" }}>
-            {conversationId
-              ? configDirty
-                ? "Tienes cambios sin guardar."
-                : "Configuración guardada."
-              : "Se aplicará al crear la conversación."}
-          </div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ fontSize: 12, fontWeight: 700 }}>Configuración IA</div>
           <button
             type="button"
-            onClick={() => void handleSaveConfig()}
-            disabled={!conversationId || !configDirty || savingConfig}
+            onClick={() => setConfigExpanded((prev) => !prev)}
             style={{
-              border: "1px solid #0ea5e9",
-              background: !conversationId || !configDirty || savingConfig ? "#cbd5e1" : "#0ea5e9",
-              color: "#ffffff",
+              border: "1px solid #cbd5e1",
+              background: "#ffffff",
+              color: "#0f172a",
               borderRadius: 6,
-              padding: "6px 10px",
+              padding: "4px 8px",
               fontSize: 11,
               fontWeight: 700,
-              cursor:
-                !conversationId || !configDirty || savingConfig ? "not-allowed" : "pointer"
+              cursor: "pointer"
             }}>
-            {savingConfig ? "Guardando..." : "Guardar"}
+            {configExpanded ? "Ocultar" : "Mostrar"}
           </button>
         </div>
+        {!configExpanded ? (
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+            <div style={{ fontSize: 11, color: "#0f172a" }}>{configSummaryText}</div>
+            <div style={{ fontSize: 10, color: "#64748b" }}>{configStatusText}</div>
+          </div>
+        ) : (
+          <>
+            <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 11 }}>
+              Prompt del sistema
+              <textarea
+                value={aiSystemPrompt}
+                onChange={(event) => setAiSystemPrompt(event.target.value)}
+                placeholder="Define el comportamiento del agente..."
+                rows={3}
+                style={{
+                  border: "1px solid #cbd5e1",
+                  borderRadius: 6,
+                  padding: "6px 8px",
+                  fontSize: 12,
+                  resize: "vertical"
+                }}
+              />
+            </label>
+            <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 11 }}>
+              Modelo
+              <input
+                value={aiModel}
+                onChange={(event) => setAiModel(event.target.value)}
+                placeholder={DEFAULT_MODEL}
+                list="ai-model-suggestions"
+                style={{
+                  border: "1px solid #cbd5e1",
+                  borderRadius: 6,
+                  padding: "6px 8px",
+                  fontSize: 12
+                }}
+              />
+              <datalist id="ai-model-suggestions">
+                {MODEL_SUGGESTIONS.map((modelName) => (
+                  <option key={modelName} value={modelName} />
+                ))}
+              </datalist>
+            </label>
+            <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 11 }}>
+              API key
+              <input
+                type="password"
+                value={aiApiKey}
+                onChange={(event) => setAiApiKey(event.target.value)}
+                placeholder="sk-..."
+                autoComplete="off"
+                style={{
+                  border: "1px solid #cbd5e1",
+                  borderRadius: 6,
+                  padding: "6px 8px",
+                  fontSize: 12
+                }}
+              />
+            </label>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ fontSize: 10, color: "#64748b" }}>{configStatusText}</div>
+              <button
+                type="button"
+                onClick={() => void handleSaveConfig()}
+                disabled={!conversationId || !configDirty || savingConfig}
+                style={{
+                  border: "1px solid #0ea5e9",
+                  background:
+                    !conversationId || !configDirty || savingConfig ? "#cbd5e1" : "#0ea5e9",
+                  color: "#ffffff",
+                  borderRadius: 6,
+                  padding: "6px 10px",
+                  fontSize: 11,
+                  fontWeight: 700,
+                  cursor:
+                    !conversationId || !configDirty || savingConfig ? "not-allowed" : "pointer"
+                }}>
+                {savingConfig ? "Guardando..." : "Guardar"}
+              </button>
+            </div>
+          </>
+        )}
       </div>
 
       {error ? (
-        <div style={{ marginBottom: 10, fontSize: 12, color: "#dc2626" }}>{error}</div>
+        <div style={{ marginBottom: 4, fontSize: 12, color: "#dc2626" }}>{error}</div>
       ) : null}
 
       <div
@@ -387,9 +460,11 @@ export function Chat() {
           borderRadius: 8,
           padding: 8,
           background: "#f8fafc",
-          maxHeight: 220,
+          flex: 1,
+          minHeight: 140,
+          minWidth: 0,
           overflowY: "auto",
-          marginBottom: 10
+          marginBottom: 6
         }}>
         {loadingMessages ? (
           <div style={{ fontSize: 12, color: "#64748b" }}>Cargando mensajes...</div>
@@ -403,6 +478,14 @@ export function Chat() {
           ? sortedMessages.map((item) => {
               const role = (item.role ?? "").toLowerCase()
               const isUser = role === "user"
+              const isInterviewer = role === "interviewer"
+              const isAssistant = role === "assistant" || (!isUser && !isInterviewer)
+
+              const label = isUser ? "Tú" : isInterviewer ? "Interviewer" : "Hannah AI"
+              const background = isUser ? "#0ea5e9" : isInterviewer ? "#fff7ed" : "#e2e8f0"
+              const color = isUser ? "#ffffff" : "#0f172a"
+              const border = isInterviewer ? "1px solid #fdba74" : "1px solid transparent"
+              const labelColor = isUser ? "#bae6fd" : isInterviewer ? "#c2410c" : "#475569"
 
               return (
                 <div
@@ -410,16 +493,21 @@ export function Chat() {
                   style={{
                     alignSelf: isUser ? "flex-end" : "flex-start",
                     maxWidth: "85%",
-                    padding: "8px 10px",
+                    padding: "6px 8px",
                     borderRadius: 10,
-                    background: isUser ? "#0ea5e9" : "#e2e8f0",
-                    color: isUser ? "#ffffff" : "#0f172a",
+                    background,
+                    color,
+                    border,
                     fontSize: 12,
                     lineHeight: 1.4,
                     whiteSpace: "pre-wrap",
-                    wordBreak: "break-word"
+                    wordBreak: "break-word",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 2
                   }}>
-                  {item.content}
+                  <div style={{ fontSize: 10, fontWeight: 700, color: labelColor }}>{label}</div>
+                  <div>{item.content}</div>
                 </div>
               )
             })

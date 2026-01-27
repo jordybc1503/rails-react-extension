@@ -1,4 +1,5 @@
 export * from "./auth"
+export * from "./captions"
 export * from "./conversations"
 export * from "./messages"
 export * from "./http"

@@ -19,9 +19,30 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
   })
 
   return (
-    <div style={{ padding: 16, width: 360, fontFamily: "system-ui, -apple-system, sans-serif" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-        <div style={{ fontSize: 14, fontWeight: 600 }}>Bienvenido, {user.email}</div>
+    <div
+      style={{
+        padding: 16,
+        width: "100%",
+        height: "100%",
+        boxSizing: "border-box",
+        fontFamily: "system-ui, -apple-system, sans-serif",
+        display: "flex",
+        flexDirection: "column",
+        minHeight: 0,
+        gap: 10
+      }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          flexWrap: "wrap",
+          gap: 8,
+          marginBottom: 4
+        }}>
+        <div style={{ fontSize: 14, fontWeight: 600, wordBreak: "break-word" }}>
+          Bienvenido, {user.email}
+        </div>
         <button
           onClick={onLogout}
           style={{
@@ -36,7 +57,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
         </button>
       </div>
 
-      <nav style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+      <nav style={{ display: "flex", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
         <NavLink to="chat" style={linkStyle}>
           Chat
         </NavLink>
@@ -48,7 +69,17 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
         </NavLink>
       </nav>
 
-      <div style={{ border: "1px solid #e2e8f0", borderRadius: 8, padding: 12 }}>
+      <div
+        style={{
+          border: "1px solid #e2e8f0",
+          borderRadius: 8,
+          padding: 12,
+          flex: 1,
+          minHeight: 0,
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden"
+        }}>
         <Outlet />
       </div>
     </div>

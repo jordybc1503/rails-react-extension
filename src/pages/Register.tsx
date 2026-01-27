@@ -35,7 +35,10 @@ export function Register({ onRegister, onSwitchToLogin, error, loading }: Regist
     <div
       style={{
         padding: 20,
-        width: 320,
+        width: "100%",
+        maxWidth: 420,
+        margin: "0 auto",
+        boxSizing: "border-box",
         fontFamily: "system-ui, -apple-system, sans-serif"
       }}>
       <h2 style={{ marginTop: 0, marginBottom: 20, fontSize: 20 }}>
