@@ -13,6 +13,7 @@ import type { Message } from "../types/message"
 
 export function Chat() {
   const ACTIVE_CONVERSATION_KEY = "active_conversation_id"
+  const PANEL_STATE_KEY = "interview_panel_state_v1"
   const [message, setMessage] = useState("")
   const [messages, setMessages] = useState<Message[]>([])
   const messagesContainerRef = useRef<HTMLDivElement>(null)
@@ -28,6 +29,8 @@ export function Chat() {
   const [aiSystemPrompt, setAiSystemPrompt] = useState("")
   const [aiModel, setAiModel] = useState("")
   const [aiApiKey, setAiApiKey] = useState("")
+  const [messageOpacity, setMessageOpacity] = useState(1)
+  const [panelOpacity, setPanelOpacity] = useState(1)
   const { conversationId } = useParams()
   const location = useLocation()
   const navigate = useNavigate()
@@ -85,6 +88,45 @@ export function Chat() {
 
     void chrome.storage.local.set({ [ACTIVE_CONVERSATION_KEY]: conversationId })
   }, [ACTIVE_CONVERSATION_KEY, conversationId])
+
+  useEffect(() => {
+    const originKey = window.location.origin
+
+    void (async () => {
+      try {
+        const result = await chrome.storage.local.get([PANEL_STATE_KEY])
+        const allStates = result[PANEL_STATE_KEY] ?? {}
+        const panelState = allStates[originKey]
+        if (panelState?.messageOpacity !== undefined) {
+          setMessageOpacity(panelState.messageOpacity)
+        }
+        if (panelState?.opacity !== undefined) {
+          setPanelOpacity(panelState.opacity)
+        }
+      } catch (err) {
+        console.warn("[Chat] Failed to read opacity from storage:", err)
+      }
+    })()
+
+    const handleStorageChange = (changes: { [key: string]: chrome.storage.StorageChange }) => {
+      if (changes[PANEL_STATE_KEY]) {
+        const newStates = changes[PANEL_STATE_KEY].newValue ?? {}
+        const panelState = newStates[originKey]
+        if (panelState?.messageOpacity !== undefined) {
+          setMessageOpacity(panelState.messageOpacity)
+        }
+        if (panelState?.opacity !== undefined) {
+          setPanelOpacity(panelState.opacity)
+        }
+      }
+    }
+
+    chrome.storage.local.onChanged.addListener(handleStorageChange)
+
+    return () => {
+      chrome.storage.local.onChanged.removeListener(handleStorageChange)
+    }
+  }, [PANEL_STATE_KEY])
 
   useEffect(() => {
     if (!conversationId) {
@@ -409,7 +451,7 @@ export function Chat() {
           border: "1px solid #e2e8f0",
           borderRadius: 4,
           padding: 6,
-          background: "#ffffff",
+          background: `rgba(255, 255, 255, ${panelOpacity})`,
           marginBottom: 6,
           display: "flex",
           flexDirection: "column",
@@ -422,7 +464,7 @@ export function Chat() {
             onClick={() => setConfigExpanded((prev) => !prev)}
             style={{
               border: "1px solid #cbd5e1",
-              background: "#ffffff",
+              background: `rgba(255, 255, 255, ${panelOpacity})`,
               color: "#0f172a",
               borderRadius: 6,
               padding: "4px 8px",
@@ -530,7 +572,7 @@ export function Chat() {
           border: "1px solid #e2e8f0",
           borderRadius: 8,
           padding: 8,
-          background: "#f8fafc",
+          background: `rgba(248, 250, 252, ${panelOpacity})`,
           flex: 1,
           minHeight: 140,
           minWidth: 0,
@@ -575,7 +617,8 @@ export function Chat() {
                     wordBreak: "break-word",
                     display: "flex",
                     flexDirection: "column",
-                    gap: 2
+                    gap: 2,
+                    opacity: messageOpacity
                   }}>
                   <div style={{ fontSize: 10, fontWeight: 700, color: labelColor }}>{label}</div>
                   <div>{item.content}</div>
@@ -602,7 +645,8 @@ export function Chat() {
               wordBreak: "break-word",
               display: "flex",
               flexDirection: "column",
-              gap: 2
+              gap: 2,
+              opacity: messageOpacity
             }}>
             <div style={{ fontSize: 10, fontWeight: 700, color: "#475569" }}>Hannah AI</div>
             <div>{streamingContent || "..."}</div>
@@ -627,7 +671,8 @@ export function Chat() {
             padding: "8px 10px",
             fontSize: 13,
             borderRadius: 6,
-            border: "1px solid #cbd5f5"
+            border: "1px solid #cbd5e1",
+            background: `rgba(255, 255, 255, ${panelOpacity})`
           }}
         />
         <button

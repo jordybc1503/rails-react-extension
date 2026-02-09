@@ -11,6 +11,7 @@ type PanelState = {
   width: number
   height: number
   opacity: number
+  messageOpacity: number
 }
 
 type PanelStateByOrigin = Record<string, PanelState>
@@ -29,7 +30,8 @@ const DEFAULT_STATE: PanelState = {
   y: 24,
   width: DEFAULT_WIDTH,
   height: DEFAULT_HEIGHT,
-  opacity: 1
+  opacity: 1,
+  messageOpacity: 1
 }
 const PANEL_MAX_HEIGHT = 720
 const MINIMIZED_WIDTH = 220
@@ -369,11 +371,10 @@ export function InterviewPanel() {
     zIndex: 2_147_483_647,
     border: "1px solid #e2e8f0",
     borderRadius: 12,
-    background: "#ffffff",
+    background: `rgba(255, 255, 255, ${panelState.opacity})`,
     boxShadow: "0 24px 60px rgba(15, 23, 42, 0.25)",
     overflow: "hidden",
-    fontFamily: "system-ui, -apple-system, sans-serif",
-    opacity: panelState.opacity
+    fontFamily: "system-ui, -apple-system, sans-serif"
   }
 
   const headerButtonStyle: CSSProperties = {
@@ -420,32 +421,67 @@ export function InterviewPanel() {
               justifyContent: "space-between",
               gap: 8,
               padding: "8px 10px",
-              background: "#0f172a",
+              background: `rgba(15, 23, 42, ${panelState.opacity})`,
               color: "#ffffff",
               cursor: "grab",
               userSelect: "none"
             }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <div style={{ fontSize: 12, fontWeight: 800 }}>Hannah AI</div>
-              <input
-                type="range"
-                min="0.2"
-                max="1"
-                step="0.05"
-                value={panelState.opacity}
-                onChange={(e) => {
-                  e.stopPropagation()
-                  setPanelState((prev) => ({ ...prev, opacity: parseFloat(e.target.value) }))
-                }}
-                onPointerDown={(e) => e.stopPropagation()}
-                title={`Transparencia: ${Math.round(panelState.opacity * 100)}%`}
-                style={{
-                  width: 60,
-                  height: 4,
-                  cursor: "pointer",
-                  accentColor: "#0ea5e9"
-                }}
-              />
+              {!panelState.isMinimized && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ fontSize: 9, opacity: 0.8, minWidth: 40 }}>Panel</span>
+                    <input
+                      type="range"
+                      min="0.2"
+                      max="1"
+                      step="0.05"
+                      value={panelState.opacity}
+                      onChange={(e) => {
+                        e.stopPropagation()
+                        setPanelState((prev) => ({ ...prev, opacity: parseFloat(e.target.value) }))
+                      }}
+                      onPointerDown={(e) => e.stopPropagation()}
+                      title={`Opacidad panel: ${Math.round(panelState.opacity * 100)}%`}
+                      style={{
+                        width: 70,
+                        height: 4,
+                        cursor: "pointer",
+                        accentColor: "#0ea5e9"
+                      }}
+                    />
+                    <span style={{ fontSize: 9, opacity: 0.8, minWidth: 28 }}>
+                      {Math.round(panelState.opacity * 100)}%
+                    </span>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ fontSize: 9, opacity: 0.8, minWidth: 40 }}>Mensajes</span>
+                    <input
+                      type="range"
+                      min="0.2"
+                      max="1"
+                      step="0.05"
+                      value={panelState.messageOpacity}
+                      onChange={(e) => {
+                        e.stopPropagation()
+                        setPanelState((prev) => ({ ...prev, messageOpacity: parseFloat(e.target.value) }))
+                      }}
+                      onPointerDown={(e) => e.stopPropagation()}
+                      title={`Opacidad mensajes: ${Math.round(panelState.messageOpacity * 100)}%`}
+                      style={{
+                        width: 70,
+                        height: 4,
+                        cursor: "pointer",
+                        accentColor: "#10b981"
+                      }}
+                    />
+                    <span style={{ fontSize: 9, opacity: 0.8, minWidth: 28 }}>
+                      {Math.round(panelState.messageOpacity * 100)}%
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
             <div style={{ display: "flex", gap: 6 }}>
               <button type="button" onClick={toggleMinimized} style={headerButtonStyle}>
@@ -476,7 +512,7 @@ export function InterviewPanel() {
                 padding: "6px 10px",
                 fontSize: 11,
                 color: "#0f172a",
-                background: "#f8fafc"
+                background: `rgba(248, 250, 252, ${panelState.opacity})`
               }}>
               Asistente minimizado. Arrastrame o expandeme.
             </div>
