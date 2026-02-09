@@ -32,9 +32,9 @@ function extractCaption(row: Element): { speaker: string; text: string } | null 
     return null
   }
 
-  const speakerText = pickText(["div.YTbUzc", "div.Zmm6We", "span.YTbUzc"], row)
+  const speakerText = pickText(["span.NWpY1d", "div.YTbUzc", "div.Zmm6We", "span.YTbUzc"], row)
   return {
-    speaker: speakerText || "Interviewer",
+    speaker: speakerText || "Interviewer2",
     text: captionText
   }
 }
