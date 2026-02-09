@@ -1,10 +1,11 @@
-import { createCaption } from "../api"
+import { createCaptionStream } from "../api"
 
 const ACTIVE_CONVERSATION_KEY = "active_conversation_id"
 
 interface SpeakerBuffer {
   text: string
   timerId: number | null
+  isSending: boolean
 }
 
 async function getActiveConversationId(): Promise<string | null> {
@@ -61,12 +62,19 @@ export function createCaptionDispatcher(platform: string) {
   const lastSent = new Map<string, string>()
   let lastErrorAt = 0
   let lastMissingConversationLogAt = 0
+  let lastAssistantRequestAt = 0  // Track last AI request globally
 
   console.log(`[captions:${platform}] dispatcher ready`)
 
   const flushSpeaker = async (speaker: string) => {
     const buffer = buffers.get(speaker)
     if (!buffer || !buffer.text.trim()) {
+      return
+    }
+
+    // Prevent concurrent sends for same speaker
+    if (buffer.isSending) {
+      console.log(`[captions:${platform}] skipping flush - already sending for ${speaker}`)
       return
     }
 
@@ -87,17 +95,58 @@ export function createCaptionDispatcher(platform: string) {
       return
     }
 
-    try {
-      const result = await createCaption(conversationId, {
-        text: textToSend,
-        speaker,
-        platform,
-        timestamp: new Date().toISOString()
-      })
+    // Check if we should throttle AI requests (8 seconds between questions)
+    const now = Date.now()
+    const timeSinceLastAI = now - lastAssistantRequestAt
+    if (timeSinceLastAI < 8000) {
+      console.log(`[captions:${platform}] throttling AI - only ${Math.floor(timeSinceLastAI / 1000)}s since last request`)
+    }
 
-      if (!result.skipped) {
-        lastSent.set(speaker, textToSend)
-      }
+    buffer.isSending = true
+
+    try {
+      await createCaptionStream(
+        conversationId,
+        {
+          text: textToSend,
+          speaker,
+          platform,
+          timestamp: new Date().toISOString()
+        },
+        {
+          onCaption: (message) => {
+            console.log(`[captions:${platform}] caption saved`, message)
+          },
+          onAssistantStart: (data) => {
+            lastAssistantRequestAt = Date.now()
+            console.log(`[captions:${platform}] assistant streaming started`, data)
+            void chrome.storage.local.set({
+              assistantStream: { type: "start", data, timestamp: Date.now() }
+            })
+          },
+          onAssistantChunk: (data) => {
+            console.log(`[captions:${platform}] chunk received:`, data.chunk)
+            void chrome.storage.local.set({
+              assistantStream: { type: "chunk", data, timestamp: Date.now() }
+            })
+          },
+          onAssistantComplete: (message) => {
+            console.log(`[captions:${platform}] assistant response complete`, message)
+            void chrome.storage.local.set({
+              assistantStream: { type: "complete", data: message, timestamp: Date.now() }
+            })
+          },
+          onSkipped: () => {
+            console.log(`[captions:${platform}] caption skipped (duplicate)`)
+          },
+          onError: (error) => {
+            console.error(`[captions:${platform}] stream error:`, error)
+          },
+          onDone: () => {
+            lastSent.set(speaker, textToSend)
+          }
+        }
+      )
     } catch (error) {
       const now = Date.now()
       if (now - lastErrorAt > 10_000) {
@@ -105,6 +154,8 @@ export function createCaptionDispatcher(platform: string) {
         const message = error instanceof Error ? error.message : String(error)
         console.error(`[captions:${platform}] ${message}`)
       }
+    } finally {
+      buffer.isSending = false
     }
   }
 
@@ -136,7 +187,7 @@ export function createCaptionDispatcher(platform: string) {
     const existing = buffers.get(speaker)
 
     if (!existing) {
-      buffers.set(speaker, { text, timerId: null })
+      buffers.set(speaker, { text, timerId: null, isSending: false })
     } else {
       existing.text = mergeCaptionText(existing.text, text)
     }

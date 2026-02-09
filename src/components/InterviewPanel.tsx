@@ -10,6 +10,7 @@ type PanelState = {
   y: number
   width: number
   height: number
+  opacity: number
 }
 
 type PanelStateByOrigin = Record<string, PanelState>
@@ -27,7 +28,8 @@ const DEFAULT_STATE: PanelState = {
   x: 24,
   y: 24,
   width: DEFAULT_WIDTH,
-  height: DEFAULT_HEIGHT
+  height: DEFAULT_HEIGHT,
+  opacity: 1
 }
 const PANEL_MAX_HEIGHT = 720
 const MINIMIZED_WIDTH = 220
@@ -370,7 +372,8 @@ export function InterviewPanel() {
     background: "#ffffff",
     boxShadow: "0 24px 60px rgba(15, 23, 42, 0.25)",
     overflow: "hidden",
-    fontFamily: "system-ui, -apple-system, sans-serif"
+    fontFamily: "system-ui, -apple-system, sans-serif",
+    opacity: panelState.opacity
   }
 
   const headerButtonStyle: CSSProperties = {
@@ -422,7 +425,28 @@ export function InterviewPanel() {
               cursor: "grab",
               userSelect: "none"
             }}>
-            <div style={{ fontSize: 12, fontWeight: 800 }}>Hannah AI</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{ fontSize: 12, fontWeight: 800 }}>Hannah AI</div>
+              <input
+                type="range"
+                min="0.2"
+                max="1"
+                step="0.05"
+                value={panelState.opacity}
+                onChange={(e) => {
+                  e.stopPropagation()
+                  setPanelState((prev) => ({ ...prev, opacity: parseFloat(e.target.value) }))
+                }}
+                onPointerDown={(e) => e.stopPropagation()}
+                title={`Transparencia: ${Math.round(panelState.opacity * 100)}%`}
+                style={{
+                  width: 60,
+                  height: 4,
+                  cursor: "pointer",
+                  accentColor: "#0ea5e9"
+                }}
+              />
+            </div>
             <div style={{ display: "flex", gap: 6 }}>
               <button type="button" onClick={toggleMinimized} style={headerButtonStyle}>
                 {panelState.isMinimized ? "Expandir" : "Minimizar"}

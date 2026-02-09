@@ -1,5 +1,5 @@
 import type { Message } from "../types/message"
-import { authenticatedFetch } from "./http"
+import { API_BASE_URL, authenticatedFetch, getToken } from "./http"
 
 export interface CreateCaptionPayload {
   text: string
@@ -13,6 +13,16 @@ export interface CreateCaptionResult {
   assistantMessage?: Message | null
   error?: string | null
   skipped?: boolean
+}
+
+export interface StreamEventHandlers {
+  onCaption?: (message: Message) => void
+  onAssistantStart?: (data: { messageId: string; role: string }) => void
+  onAssistantChunk?: (data: { messageId: string; chunk: string }) => void
+  onAssistantComplete?: (message: Message) => void
+  onError?: (error: string) => void
+  onSkipped?: () => void
+  onDone?: () => void
 }
 
 export async function createCaption(
@@ -41,5 +51,107 @@ export async function createCaption(
     assistantMessage: (data?.assistant_message ?? data?.assistantMessage ?? null) as Message | null,
     error: (data?.error ?? null) as string | null,
     skipped: Boolean(data?.skipped)
+  }
+}
+
+export async function createCaptionStream(
+  conversationId: string | number,
+  payload: CreateCaptionPayload,
+  handlers: StreamEventHandlers
+): Promise<void> {
+  const token = await getToken()
+  if (!token) {
+    throw new Error("No authentication token found")
+  }
+
+  const url = new URL(`/api/v1/conversations/${conversationId}/captions/stream`, API_BASE_URL)
+
+  const response = await fetch(url.toString(), {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${token}`,
+      "Content-Type": "application/json",
+      "Accept": "text/event-stream"
+    },
+    body: JSON.stringify(payload)
+  })
+
+  if (!response.ok) {
+    throw new Error(`Stream request failed: ${response.status}`)
+  }
+
+  const reader = response.body?.getReader()
+  if (!reader) {
+    throw new Error("Response body is not readable")
+  }
+
+  const decoder = new TextDecoder()
+  let buffer = ""
+  let currentEvent = "message"
+  let currentData = ""
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+
+      buffer += decoder.decode(value, { stream: true })
+
+      // Process complete lines
+      while (buffer.includes("\n")) {
+        const newlineIndex = buffer.indexOf("\n")
+        const line = buffer.slice(0, newlineIndex).trim()
+        buffer = buffer.slice(newlineIndex + 1)
+
+        if (line.startsWith("event: ")) {
+          currentEvent = line.slice(7).trim()
+        } else if (line.startsWith("data: ")) {
+          currentData = line.slice(6).trim()
+        } else if (line === "") {
+          // Empty line signals end of event - dispatch it now
+          if (currentData) {
+            handleSSEEvent(currentEvent, currentData, handlers)
+            currentData = ""
+            currentEvent = "message"
+          }
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock()
+  }
+}
+
+function handleSSEEvent(event: string, data: string, handlers: StreamEventHandlers) {
+  try {
+    const parsed = JSON.parse(data)
+
+    switch (event) {
+      case "caption":
+        handlers.onCaption?.(parsed as Message)
+        break
+      case "assistant_start":
+        handlers.onAssistantStart?.(parsed)
+        break
+      case "assistant_chunk":
+        handlers.onAssistantChunk?.(parsed)
+        break
+      case "assistant_complete":
+        handlers.onAssistantComplete?.(parsed as Message)
+        break
+      case "error":
+        handlers.onError?.(parsed.error || "Unknown error")
+        break
+      case "skipped":
+        handlers.onSkipped?.()
+        break
+      case "done":
+        handlers.onDone?.()
+        break
+      default:
+        console.warn(`[SSE] Unknown event: ${event}`)
+    }
+  } catch (error) {
+    console.error("[SSE] Failed to parse event data:", data, error)
   }
 }

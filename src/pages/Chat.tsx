@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useLocation, useNavigate, useParams } from "react-router-dom"
 
 import {
@@ -15,10 +15,13 @@ export function Chat() {
   const ACTIVE_CONVERSATION_KEY = "active_conversation_id"
   const [message, setMessage] = useState("")
   const [messages, setMessages] = useState<Message[]>([])
+  const messagesContainerRef = useRef<HTMLDivElement>(null)
   const [conversation, setConversation] = useState<Conversation | null>(null)
   const [loadingMessages, setLoadingMessages] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [sending, setSending] = useState(false)
+  const [streamingContent, setStreamingContent] = useState<string | null>(null)
+  const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null)
   const [savingConfig, setSavingConfig] = useState(false)
   const [configExpanded, setConfigExpanded] = useState(false)
   const [conversationTitleOverride, setConversationTitleOverride] = useState<string | null>(null)
@@ -137,7 +140,24 @@ export function Chat() {
       try {
         const latestMessages = await getMessages(conversationId)
         if (!isCancelled && latestMessages.length > 0) {
-          setMessages(latestMessages)
+          setMessages((prev) => {
+            // Only update if messages actually changed (compare by length and last message ID)
+            if (prev.length !== latestMessages.length) {
+              return latestMessages
+            }
+            const prevLastId = prev[prev.length - 1]?.id
+            const latestLastId = latestMessages[latestMessages.length - 1]?.id
+            if (prevLastId !== latestLastId) {
+              return latestMessages
+            }
+            // Also check first message in case of deletions
+            const prevFirstId = prev[0]?.id
+            const latestFirstId = latestMessages[0]?.id
+            if (prevFirstId !== latestFirstId) {
+              return latestMessages
+            }
+            return prev  // No change, keep same reference
+          })
         }
       } catch (err) {
         if (!isCancelled) {
@@ -185,6 +205,55 @@ export function Chat() {
       next[existingIndex] = nextMessage
       return next
     })
+  }, [])
+
+  // Auto-scroll only when streaming content updates (not for regular caption messages)
+  useEffect(() => {
+    if (streamingContent !== null && messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight
+    }
+  }, [streamingContent])
+
+  // Listen for assistant streaming events via chrome.storage (cross-context compatible)
+  useEffect(() => {
+    const handleStorageChange = (
+      changes: { [key: string]: chrome.storage.StorageChange },
+      areaName: string
+    ) => {
+      if (areaName !== "local" || !changes.assistantStream) return
+
+      const { newValue } = changes.assistantStream
+      if (!newValue) return
+
+      const { type, data } = newValue
+
+      if (type === "start") {
+        console.log("[Chat] stream start received", data)
+        setStreamingMessageId(data.messageId)
+        setStreamingContent("")
+      } else if (type === "chunk") {
+        setStreamingContent((prev) => (prev ?? "") + data.chunk)
+      } else if (type === "complete") {
+        console.log("[Chat] stream complete received", data)
+        setStreamingContent(null)
+        setStreamingMessageId(null)
+        // Add the complete message to the list and scroll to it
+        setMessages((prev) => {
+          const exists = prev.some((m) => m.id === data.id)
+          if (exists) return prev
+          return [...prev, data]
+        })
+        // Scroll after adding the complete message
+        setTimeout(() => {
+          if (messagesContainerRef.current) {
+            messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight
+          }
+        }, 50)
+      }
+    }
+
+    chrome.storage.onChanged.addListener(handleStorageChange)
+    return () => chrome.storage.onChanged.removeListener(handleStorageChange)
   }, [])
 
   const sortedMessages = useMemo(() => {
@@ -453,6 +522,7 @@ export function Chat() {
       ) : null}
 
       <div
+        ref={messagesContainerRef}
         style={{
           display: "flex",
           flexDirection: "column",
@@ -513,6 +583,31 @@ export function Chat() {
               )
             })
           : null}
+
+        {/* Streaming message in progress */}
+        {streamingContent !== null && (
+          <div
+            key={streamingMessageId ?? "streaming"}
+            style={{
+              alignSelf: "flex-start",
+              maxWidth: "85%",
+              padding: "6px 8px",
+              borderRadius: 10,
+              background: "#e2e8f0",
+              color: "#0f172a",
+              border: "1px solid #94a3b8",
+              fontSize: 12,
+              lineHeight: 1.4,
+              whiteSpace: "pre-wrap",
+              wordBreak: "break-word",
+              display: "flex",
+              flexDirection: "column",
+              gap: 2
+            }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: "#475569" }}>Hannah AI</div>
+            <div>{streamingContent || "..."}</div>
+          </div>
+        )}
       </div>
 
       <div style={{ display: "flex", gap: 8 }}>
