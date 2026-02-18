@@ -4,6 +4,7 @@ import { useLocation, useNavigate, useParams } from "react-router-dom"
 import {
   createConversation,
   createMessage,
+  downloadConversationReport,
   getConversation,
   getMessages,
   updateConversation
@@ -29,6 +30,7 @@ export function Chat() {
   const [aiSystemPrompt, setAiSystemPrompt] = useState("")
   const [aiModel, setAiModel] = useState("")
   const [aiApiKey, setAiApiKey] = useState("")
+  const [downloadingReport, setDownloadingReport] = useState(false)
   const [messageOpacity, setMessageOpacity] = useState(1)
   const [panelOpacity, setPanelOpacity] = useState(1)
   const { conversationId } = useParams()
@@ -429,6 +431,37 @@ export function Chat() {
     upsertMessage
   ])
 
+  const handleDownloadReport = useCallback(async () => {
+    if (!conversationId) {
+      return
+    }
+
+    let reportUrl: string | null = null
+
+    try {
+      setDownloadingReport(true)
+      setError(null)
+
+      const { blob, filename } = await downloadConversationReport(conversationId)
+      reportUrl = window.URL.createObjectURL(blob)
+
+      const link = document.createElement("a")
+      link.href = reportUrl
+      link.download = filename
+      link.style.display = "none"
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error descargando el reporte")
+    } finally {
+      if (reportUrl) {
+        window.URL.revokeObjectURL(reportUrl)
+      }
+      setDownloadingReport(false)
+    }
+  }, [conversationId])
+
   return (
     <div
       style={{
@@ -438,7 +471,35 @@ export function Chat() {
         height: "100%",
         minHeight: 0
       }}>
-      <div style={{ marginBottom: 2, fontSize: 13, fontWeight: 700 }}>{conversationTitle}</div>
+      <div
+        style={{
+          marginBottom: 2,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 8
+        }}>
+        <div style={{ fontSize: 13, fontWeight: 700 }}>{conversationTitle}</div>
+        {conversationId ? (
+          <button
+            type="button"
+            disabled={downloadingReport}
+            onClick={() => void handleDownloadReport()}
+            style={{
+              border: "1px solid #0f172a",
+              background: downloadingReport ? "#cbd5e1" : "#0f172a",
+              color: "#ffffff",
+              borderRadius: 6,
+              padding: "4px 8px",
+              fontSize: 11,
+              fontWeight: 700,
+              cursor: downloadingReport ? "not-allowed" : "pointer",
+              whiteSpace: "nowrap"
+            }}>
+            {downloadingReport ? "Descargando..." : "Descargar reporte"}
+          </button>
+        ) : null}
+      </div>
       {conversationId ? (
         null
       ) : <div style={{ marginBottom: 6, fontSize: 12, color: "#475569" }}>
