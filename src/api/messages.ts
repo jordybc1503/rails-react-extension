@@ -15,6 +15,13 @@ export interface CreateMessageResult {
   error?: string | null
 }
 
+export interface RespondLastInterviewerResult {
+  assistantMessage?: Message | null
+  skipped?: boolean
+  interviewerMessageId?: string | number | null
+  error?: string | null
+}
+
 function extractMessages(data: unknown): Message[] {
   if (Array.isArray(data)) {
     return data as Message[]
@@ -73,5 +80,39 @@ export async function createMessage(
     assistantMessage,
     conversation,
     error
+  }
+}
+
+export async function respondLastInterviewer(
+  conversationId: string | number
+): Promise<RespondLastInterviewerResult> {
+  const response = await authenticatedFetch(
+    `/api/v1/conversations/${conversationId}/messages/respond_last_interviewer`,
+    {
+      method: "POST"
+    }
+  )
+
+  const data = await response.json().catch(() => ({}))
+
+  if (!response.ok) {
+    const message =
+      typeof data?.error === "string"
+        ? data.error
+        : typeof data?.errors?.[0] === "string"
+          ? data.errors[0]
+          : "Failed to generate response for last interviewer message"
+
+    throw new Error(message)
+  }
+
+  return {
+    assistantMessage: (data?.assistant_message ?? data?.assistantMessage ?? null) as Message | null,
+    skipped: Boolean(data?.skipped),
+    interviewerMessageId: (data?.interviewer_message_id ?? data?.interviewerMessageId ?? null) as
+      | string
+      | number
+      | null,
+    error: (data?.error ?? null) as string | null
   }
 }

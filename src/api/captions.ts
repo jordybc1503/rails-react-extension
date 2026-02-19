@@ -6,6 +6,7 @@ export interface CreateCaptionPayload {
   speaker?: string
   platform?: string
   timestamp?: string
+  response_mode?: "auto" | "manual_last_interviewer"
 }
 
 export interface CreateCaptionResult {

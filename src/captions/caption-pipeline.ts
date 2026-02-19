@@ -1,6 +1,10 @@
 import { createCaptionStream } from "../api"
 
 const ACTIVE_CONVERSATION_KEY = "active_conversation_id"
+const AI_RESPONSE_MODE_KEY = "ai_response_mode"
+const DEFAULT_AI_RESPONSE_MODE = "auto"
+
+type AiResponseMode = "auto" | "manual_last_interviewer"
 
 interface SpeakerBuffer {
   text: string
@@ -16,6 +20,16 @@ async function getActiveConversationId(): Promise<string | null> {
   }
 
   return null
+}
+
+async function getAiResponseMode(): Promise<AiResponseMode> {
+  const result = await chrome.storage.local.get([AI_RESPONSE_MODE_KEY])
+  const rawValue = result[AI_RESPONSE_MODE_KEY]
+  if (rawValue === "manual_last_interviewer") {
+    return "manual_last_interviewer"
+  }
+
+  return DEFAULT_AI_RESPONSE_MODE
 }
 
 function mergeCaptionText(previous: string, next: string): string {
@@ -95,6 +109,8 @@ export function createCaptionDispatcher(platform: string) {
       return
     }
 
+    const responseMode = await getAiResponseMode()
+
     // Check if we should throttle AI requests (8 seconds between questions)
     const now = Date.now()
     const timeSinceLastAI = now - lastAssistantRequestAt
@@ -111,7 +127,8 @@ export function createCaptionDispatcher(platform: string) {
           text: textToSend,
           speaker,
           platform,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
+          response_mode: responseMode
         },
         {
           onCaption: (message) => {

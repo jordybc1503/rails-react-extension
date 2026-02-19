@@ -7,6 +7,7 @@ import {
   downloadConversationReport,
   getConversation,
   getMessages,
+  respondLastInterviewer,
   updateConversation
 } from "../api"
 import type { Conversation } from "../types/conversation"
@@ -15,6 +16,8 @@ import type { Message } from "../types/message"
 export function Chat() {
   const ACTIVE_CONVERSATION_KEY = "active_conversation_id"
   const PANEL_STATE_KEY = "interview_panel_state_v1"
+  const AI_RESPONSE_MODE_KEY = "ai_response_mode"
+  const DEFAULT_AI_RESPONSE_MODE = "auto"
   const [message, setMessage] = useState("")
   const [messages, setMessages] = useState<Message[]>([])
   const messagesContainerRef = useRef<HTMLDivElement>(null)
@@ -30,6 +33,10 @@ export function Chat() {
   const [aiSystemPrompt, setAiSystemPrompt] = useState("")
   const [aiModel, setAiModel] = useState("")
   const [aiApiKey, setAiApiKey] = useState("")
+  const [aiResponseMode, setAiResponseMode] = useState<"auto" | "manual_last_interviewer">(
+    DEFAULT_AI_RESPONSE_MODE
+  )
+  const [triggeringLastInterviewerResponse, setTriggeringLastInterviewerResponse] = useState(false)
   const [downloadingReport, setDownloadingReport] = useState(false)
   const [messageOpacity, setMessageOpacity] = useState(1)
   const [panelOpacity, setPanelOpacity] = useState(1)
@@ -131,6 +138,32 @@ export function Chat() {
   }, [PANEL_STATE_KEY])
 
   useEffect(() => {
+    let isMounted = true
+
+    void (async () => {
+      try {
+        const result = await chrome.storage.local.get([AI_RESPONSE_MODE_KEY])
+        const rawMode = result[AI_RESPONSE_MODE_KEY]
+        if (!isMounted) {
+          return
+        }
+
+        setAiResponseMode(
+          rawMode === "manual_last_interviewer" ? "manual_last_interviewer" : DEFAULT_AI_RESPONSE_MODE
+        )
+      } catch (err) {
+        if (isMounted) {
+          setAiResponseMode(DEFAULT_AI_RESPONSE_MODE)
+        }
+      }
+    })()
+
+    return () => {
+      isMounted = false
+    }
+  }, [AI_RESPONSE_MODE_KEY, DEFAULT_AI_RESPONSE_MODE])
+
+  useEffect(() => {
     if (!conversationId) {
       setMessages([])
       setConversation(null)
@@ -185,22 +218,19 @@ export function Chat() {
         const latestMessages = await getMessages(conversationId)
         if (!isCancelled && latestMessages.length > 0) {
           setMessages((prev) => {
-            // Only update if messages actually changed (compare by length and last message ID)
-            if (prev.length !== latestMessages.length) {
+            const signatureFor = (items: Message[]) =>
+              items
+                .map((item) => {
+                  const updatedAt = item.updatedAt ?? item.updated_at ?? ""
+                  return `${item.id}:${updatedAt}:${item.content}`
+                })
+                .join("|")
+
+            if (signatureFor(prev) !== signatureFor(latestMessages)) {
               return latestMessages
             }
-            const prevLastId = prev[prev.length - 1]?.id
-            const latestLastId = latestMessages[latestMessages.length - 1]?.id
-            if (prevLastId !== latestLastId) {
-              return latestMessages
-            }
-            // Also check first message in case of deletions
-            const prevFirstId = prev[0]?.id
-            const latestFirstId = latestMessages[0]?.id
-            if (prevFirstId !== latestFirstId) {
-              return latestMessages
-            }
-            return prev  // No change, keep same reference
+
+            return prev
           })
         }
       } catch (err) {
@@ -365,6 +395,10 @@ export function Chat() {
     : "Se aplicará al crear la conversación."
 
   const configSummaryText = `Modelo: ${aiModel.trim() || DEFAULT_MODEL}`
+  const aiResponseModeLabel =
+    aiResponseMode === "manual_last_interviewer"
+      ? "Manual (último interviewer)"
+      : "Automático (actual)"
 
   const handleSend = useCallback(async () => {
     const trimmed = message.trim()
@@ -462,6 +496,56 @@ export function Chat() {
     }
   }, [conversationId])
 
+  const handleAiResponseModeChange = useCallback(
+    async (nextMode: "auto" | "manual_last_interviewer") => {
+      setAiResponseMode(nextMode)
+      await chrome.storage.local.set({ [AI_RESPONSE_MODE_KEY]: nextMode })
+    },
+    [AI_RESPONSE_MODE_KEY]
+  )
+
+  const handleRespondLastInterviewer = useCallback(async () => {
+    if (!conversationId) {
+      return
+    }
+
+    try {
+      setTriggeringLastInterviewerResponse(true)
+      setError(null)
+
+      const result = await respondLastInterviewer(conversationId)
+
+      if (result.assistantMessage) {
+        upsertMessage(result.assistantMessage)
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error respondiendo al último interviewer")
+    } finally {
+      setTriggeringLastInterviewerResponse(false)
+    }
+  }, [conversationId, upsertMessage])
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const isShortcut =
+        (event.ctrlKey || event.metaKey) &&
+        event.shiftKey &&
+        event.key.toLowerCase() === "r"
+
+      if (!isShortcut || !conversationId) {
+        return
+      }
+
+      event.preventDefault()
+      void handleRespondLastInterviewer()
+    }
+
+    window.addEventListener("keydown", handleKeyDown)
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown)
+    }
+  }, [conversationId, handleRespondLastInterviewer])
+
   return (
     <div
       style={{
@@ -481,23 +565,44 @@ export function Chat() {
         }}>
         <div style={{ fontSize: 13, fontWeight: 700 }}>{conversationTitle}</div>
         {conversationId ? (
-          <button
-            type="button"
-            disabled={downloadingReport}
-            onClick={() => void handleDownloadReport()}
-            style={{
-              border: "1px solid #0f172a",
-              background: downloadingReport ? "#cbd5e1" : "#0f172a",
-              color: "#ffffff",
-              borderRadius: 6,
-              padding: "4px 8px",
-              fontSize: 11,
-              fontWeight: 700,
-              cursor: downloadingReport ? "not-allowed" : "pointer",
-              whiteSpace: "nowrap"
-            }}>
-            {downloadingReport ? "Descargando..." : "Descargar reporte"}
-          </button>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <button
+              type="button"
+              disabled={triggeringLastInterviewerResponse}
+              onClick={() => void handleRespondLastInterviewer()}
+              title="Generar respuesta al último mensaje del interviewer"
+              style={{
+                border: "1px solid #0ea5e9",
+                background:
+                  triggeringLastInterviewerResponse ? "#cbd5e1" : "#0ea5e9",
+                color: "#ffffff",
+                borderRadius: 6,
+                padding: "4px 8px",
+                fontSize: 11,
+                fontWeight: 700,
+                cursor: triggeringLastInterviewerResponse ? "not-allowed" : "pointer",
+                whiteSpace: "nowrap"
+              }}>
+              {triggeringLastInterviewerResponse ? "Generando..." : "Responder último interviewer"}
+            </button>
+            <button
+              type="button"
+              disabled={downloadingReport}
+              onClick={() => void handleDownloadReport()}
+              style={{
+                border: "1px solid #0f172a",
+                background: downloadingReport ? "#cbd5e1" : "#0f172a",
+                color: "#ffffff",
+                borderRadius: 6,
+                padding: "4px 8px",
+                fontSize: 11,
+                fontWeight: 700,
+                cursor: downloadingReport ? "not-allowed" : "pointer",
+                whiteSpace: "nowrap"
+              }}>
+              {downloadingReport ? "Descargando..." : "Descargar reporte"}
+            </button>
+          </div>
         ) : null}
       </div>
       {conversationId ? (
@@ -538,7 +643,9 @@ export function Chat() {
         </div>
         {!configExpanded ? (
           <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
-            <div style={{ fontSize: 11, color: "#0f172a" }}>{configSummaryText}</div>
+            <div style={{ fontSize: 11, color: "#0f172a" }}>
+              {configSummaryText} | Modo: {aiResponseModeLabel}
+            </div>
             <div style={{ fontSize: 10, color: "#64748b" }}>{configStatusText}</div>
           </div>
         ) : (
@@ -595,6 +702,31 @@ export function Chat() {
                 }}
               />
             </label>
+            <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 11 }}>
+              Modo de respuesta para captions
+              <select
+                value={aiResponseMode}
+                onChange={(event) =>
+                  void handleAiResponseModeChange(
+                    event.target.value as "auto" | "manual_last_interviewer"
+                  )
+                }
+                style={{
+                  border: "1px solid #cbd5e1",
+                  borderRadius: 6,
+                  padding: "6px 8px",
+                  fontSize: 12,
+                  background: "#ffffff"
+                }}>
+                <option value="auto">Automático (actual)</option>
+                <option value="manual_last_interviewer">Manual: último interviewer</option>
+              </select>
+            </label>
+            {aiResponseMode === "manual_last_interviewer" ? (
+              <div style={{ fontSize: 10, color: "#475569" }}>
+                Trigger manual activo. Usa el botón de respuesta o el shortcut Ctrl+Shift+R.
+              </div>
+            ) : null}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div style={{ fontSize: 10, color: "#64748b" }}>{configStatusText}</div>
               <button
